@@ -46,6 +46,11 @@ class MainApp:
         self.playlists_tab = PlaylistsTab(self.notebook, self)
         self.notebook.add(self.playlists_tab, text="  📁 Playlists  ")
 
+        # Tab 5: Settings & Backup
+        from gui.settings_tab import SettingsTab
+        self.settings_tab = SettingsTab(self.notebook, self)
+        self.notebook.add(self.settings_tab, text="  ⚙️ Settings  ")
+
         # Status Bar at bottom
         self.status_bar = ttk.Frame(self.root, padding=(8, 4))
         self.status_bar.pack(fill="x", side="bottom")

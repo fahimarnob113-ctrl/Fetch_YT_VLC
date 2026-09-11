@@ -24,6 +24,52 @@ class PlayTab(ttk.Frame):
         self._cancel_flag = False
 
         self._build_ui()
+        self._check_version_background()
+
+    def _check_version_background(self):
+        """Check for yt-dlp update silently on startup."""
+        def check():
+            info = ytdlp_utils.get_version_info()
+            if info.get("update_available"):
+                self.root.after(0, lambda: self._show_update_banner(info))
+        threading.Thread(target=check, daemon=True).start()
+
+    def _show_update_banner(self, info):
+        self.update_banner = tb.Frame(self, bootstyle="warning", padding=8)
+        self.update_banner.pack(fill="x", pady=(0, 10), before=self.url_frame)
+
+        tb.Label(
+            self.update_banner,
+            text=f"⚡ Newer yt-dlp update available ({info.get('latest')})",
+            bootstyle="inverse-warning",
+            font=("Segoe UI", 9, "bold")
+        ).pack(side="left")
+
+        tb.Button(
+            self.update_banner,
+            text="Update Now",
+            style="Action.TButton",
+            command=self._quick_update_ytdlp
+        ).pack(side="right", padx=(6, 0))
+
+        tb.Button(
+            self.update_banner,
+            text="✕",
+            style="Action.TButton",
+            command=lambda: self.update_banner.destroy()
+        ).pack(side="right")
+
+    def _quick_update_ytdlp(self):
+        self.log("Starting yt-dlp update via pip...")
+        self.app.set_status("Updating yt-dlp in background...")
+        if hasattr(self, "update_banner"):
+            self.update_banner.destroy()
+
+        def run_up():
+            ytdlp_utils.update_ytdlp(log_callback=self.log)
+            self.root.after(0, lambda: self.app.set_status("yt-dlp update complete"))
+
+        threading.Thread(target=run_up, daemon=True).start()
 
     def _build_ui(self):
         # 1. Dependency Warning Banner (if yt-dlp missing)
@@ -38,10 +84,10 @@ class PlayTab(ttk.Frame):
             ).pack(side="left")
 
         # 2. URL Input Section
-        url_frame = tb.LabelFrame(self, text=" YouTube URL ", padding=10)
-        url_frame.pack(fill="x", pady=(0, 10))
+        self.url_frame = tb.LabelFrame(self, text=" YouTube URL ", padding=10)
+        self.url_frame.pack(fill="x", pady=(0, 10))
 
-        entry_row = tb.Frame(url_frame)
+        entry_row = tb.Frame(self.url_frame)
         entry_row.pack(fill="x")
 
         self.url_var = tk.StringVar()
@@ -68,7 +114,7 @@ class PlayTab(ttk.Frame):
         ).pack(side="left")
 
         # Validation feedback label
-        self.validation_label = tb.Label(url_frame, text="", style="Muted.TLabel")
+        self.validation_label = tb.Label(self.url_frame, text="", style="Muted.TLabel")
         self.validation_label.pack(anchor="w", pady=(4, 0))
 
         # 3. Mode & Quality Section
