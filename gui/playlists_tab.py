@@ -56,7 +56,7 @@ class PlaylistsTab(ttk.Frame):
         self.fetch_btn.pack(side="left")
 
         # 2. Split Paned Window (Left: Playlists, Right: Tracks)
-        paned = tb.PanedWindow(self, orient="horizontal")
+        paned = ttk.PanedWindow(self, orient="horizontal")
         paned.pack(fill="both", expand=True, pady=(0, 8))
 
         # --- Left Panel: Playlists List ---
