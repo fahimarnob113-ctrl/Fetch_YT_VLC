@@ -219,7 +219,7 @@ class PlaylistsTab(ttk.Frame):
             return
 
         self.fetch_btn.config(state="disabled", text="⏳ Resolving...")
-        self.app.set_status("Fetching playlist tracks from YouTube...")
+        self.app.set_busy(True, "Fetching playlist tracks from YouTube...")
 
         def worker():
             try:
@@ -235,11 +235,13 @@ class PlaylistsTab(ttk.Frame):
                     self.url_var.set(""),
                     self.refresh(),
                     self._select_playlist_by_id(pl["id"]),
-                    self.app.set_status(f"Saved playlist: {pl_name} ({len(entries)} items)")
+                    self.app.set_busy(False, f"Saved playlist: {pl_name} ({len(entries)} items)")
                 ])
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Fetch Error", f"Could not fetch playlist:\n{e}"))
-                self.root.after(0, lambda: self.app.set_status("Playlist fetch failed"))
+                self.root.after(0, lambda: [
+                    messagebox.showerror("Fetch Error", f"Could not fetch playlist:\n{e}"),
+                    self.app.set_busy(False, "Playlist fetch failed")
+                ])
             finally:
                 self.root.after(0, lambda: self.fetch_btn.config(state="normal", text="📥 Fetch & Save Playlist"))
 
@@ -376,13 +378,14 @@ class PlaylistsTab(ttk.Frame):
             return
 
         items = pl.get("items", [])
-        self.app.set_status(f"Opening playlist in VLC: {pl.get('name')} ({len(items)} items)...")
+        self.app.set_busy(True, f"Opening playlist in VLC: {pl.get('name')} ({len(items)} items)...")
 
         # Launch VLC asynchronously with M3U playlist
-        threading.Thread(
-            target=lambda: vlc_utils.launch_vlc(vlc_path, items),
-            daemon=True
-        ).start()
+        def launch():
+            vlc_utils.launch_vlc(vlc_path, items)
+            self.root.after(0, lambda: self.app.set_busy(False, "VLC playlist playback active"))
+
+        threading.Thread(target=launch, daemon=True).start()
 
     def play_selected_track(self):
         if not self._selected_playlist_id:
@@ -404,8 +407,10 @@ class PlaylistsTab(ttk.Frame):
                 messagebox.showerror("VLC Required", "VLC executable not found.")
                 return
 
-            self.app.set_status(f"Playing track in VLC: {item.get('title')}")
-            threading.Thread(
-                target=lambda: vlc_utils.launch_vlc(vlc_path, [item]),
-                daemon=True
-            ).start()
+            self.app.set_busy(True, f"Playing track in VLC: {item.get('title')}")
+
+            def launch():
+                vlc_utils.launch_vlc(vlc_path, [item])
+                self.root.after(0, lambda: self.app.set_busy(False, "Playing track in VLC"))
+
+            threading.Thread(target=launch, daemon=True).start()

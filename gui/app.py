@@ -69,6 +69,14 @@ class MainApp:
         )
         self.debug_status.pack(side="right")
 
+        # Global Indeterminate Progress Bar (shown when app is busy loading/resolving)
+        self.status_progress = tb.Progressbar(
+            self.status_bar,
+            mode="indeterminate",
+            bootstyle="warning-striped",
+            length=140
+        )
+
     def _toggle_debug_shortcut(self, event=None):
         current = config.get("debug_mode", False)
         new_val = not current
@@ -82,3 +90,14 @@ class MainApp:
 
     def set_status(self, text: str):
         self.status_label.config(text=text)
+
+    def set_busy(self, is_busy: bool, message: str = ""):
+        """Control the global status bar spinner/progress bar and message."""
+        if message:
+            self.set_status(message)
+        if is_busy:
+            self.status_progress.pack(side="right", padx=(0, 10))
+            self.status_progress.start(10)
+        else:
+            self.status_progress.stop()
+            self.status_progress.pack_forget()

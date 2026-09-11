@@ -18,12 +18,21 @@ class PlayTab(ttk.Frame):
         self.app = app
         self.root = app.root
 
-        self.vlc_path = vlc_utils.find_vlc_path() or config.get("vlc_path", "")
+        configured_vlc = config.get("vlc_path", "")
+        if configured_vlc and os.path.isfile(configured_vlc):
+            self.vlc_path = configured_vlc
+            self._vlc_detecting = False
+        else:
+            self.vlc_path = ""
+            self._vlc_detecting = True
+
         self.download_dir = config.get("download_dir", os.path.join(os.path.expanduser("~"), "Videos", "YT-VLC-Downloads"))
         self.is_working = False
         self._cancel_flag = False
 
         self._build_ui()
+        if self._vlc_detecting:
+            vlc_utils.find_vlc_path_async(self._on_vlc_detected)
         self._check_version_background()
 
     def _check_version_background(self):
@@ -202,10 +211,20 @@ class PlayTab(ttk.Frame):
 
         tb.Label(vlc_box, text="VLC Player:", font=("Segoe UI", 9, "bold")).pack(side="left")
 
+        if self._vlc_detecting:
+            vlc_text = "🔍 Detecting VLC in background..."
+            vlc_style = "warning"
+        elif self.vlc_path:
+            vlc_text = self.vlc_path
+            vlc_style = "success"
+        else:
+            vlc_text = "Not found - Click Browse"
+            vlc_style = "danger"
+
         self.vlc_status_label = tb.Label(
             vlc_box,
-            text=self.vlc_path if self.vlc_path else "Not found - Click Browse",
-            bootstyle="success" if self.vlc_path else "danger",
+            text=vlc_text,
+            bootstyle=vlc_style,
             font=("Segoe UI", 9)
         )
         self.vlc_status_label.pack(side="left", padx=10, fill="x", expand=True)
@@ -284,12 +303,28 @@ class PlayTab(ttk.Frame):
 
         # Initial Welcome in Log
         self.log("YT → VLC Launcher ready.")
-        if self.vlc_path:
+        if self._vlc_detecting:
+            self.log("🔍 Looking for VLC player in background...")
+        elif self.vlc_path:
             self.log(f"VLC found: {self.vlc_path}")
         else:
             self.log("⚠️ VLC not detected automatically. Please click 'Browse...' to select vlc.exe.")
 
         self._on_mode_change()
+
+    def _on_vlc_detected(self, path):
+        def apply():
+            self._vlc_detecting = False
+            self.vlc_path = path or ""
+            if self.vlc_path:
+                self.vlc_status_label.config(text=self.vlc_path, bootstyle="success")
+                self.log(f"VLC detected: {self.vlc_path}")
+                if hasattr(self.app, "settings_tab") and hasattr(self.app.settings_tab, "vlc_path_var"):
+                    self.app.settings_tab.vlc_path_var.set(self.vlc_path)
+            else:
+                self.vlc_status_label.config(text="Not found - Click Browse", bootstyle="danger")
+                self.log("⚠️ VLC not detected automatically. Please click 'Browse...' to select vlc.exe.")
+        self.root.after(0, apply)
 
     def _paste_from_clipboard(self):
         try:
@@ -394,12 +429,21 @@ class PlayTab(ttk.Frame):
         self.is_working = True
         self._cancel_flag = False
         self.cancel_btn.config(state="normal")
-        self.progress_bar["value"] = 0
-        self.progress_label.config(text="Preparing...")
 
-        action_text = "⏳ Resolving Media..." if mode == "stream" else "⏳ Downloading..."
+        if mode == "stream":
+            self.progress_bar.config(mode="indeterminate")
+            self.progress_bar.start(10)
+            self.progress_label.config(text="⏳ Resolving YouTube stream formats & signatures...")
+            action_text = "⏳ Resolving Media..."
+            self.app.set_busy(True, "Contacting YouTube & resolving streams...")
+        else:
+            self.progress_bar.config(mode="indeterminate")
+            self.progress_bar.start(10)
+            self.progress_label.config(text="⏳ Querying format availability & file size...")
+            action_text = "⏳ Downloading..."
+            self.app.set_busy(True, "Preparing download...")
+
         self.go_btn.config(state="disabled", text=action_text)
-        self.app.set_status(f"Working ({mode})...")
 
         # Spawn worker thread
         threading.Thread(
@@ -471,7 +515,6 @@ class PlayTab(ttk.Frame):
                         pct_str = d.get("_percent_str", f"{pct:.1f}%").strip()
                         speed = d.get("_speed_str", "").strip()
                         eta = d.get("_eta_str", "").strip()
-                        fname = os.path.basename(d.get("filename", ""))
 
                         status_txt = f"{pct_str} | {speed} | ETA: {eta}" if speed else f"{pct_str}"
                         self.root.after(0, lambda: self._update_progress(pct, status_txt))
@@ -518,16 +561,29 @@ class PlayTab(ttk.Frame):
             self.root.after(0, self._reset_work_state)
 
     def _update_progress(self, percent: float, label_text: str):
-        self.progress_bar["value"] = percent
-        self.progress_label.config(text=label_text)
+        try:
+            if str(self.progress_bar.cget("mode")) != "determinate":
+                self.progress_bar.stop()
+                self.progress_bar.config(mode="determinate")
+            self.progress_bar["value"] = percent
+            self.progress_label.config(text=label_text)
+        except Exception:
+            pass
 
     def _reset_work_state(self):
         self.is_working = False
         self._cancel_flag = False
         self.cancel_btn.config(state="disabled")
+        try:
+            self.progress_bar.stop()
+            self.progress_bar.config(mode="determinate")
+            self.progress_bar["value"] = 0
+            self.progress_label.config(text="")
+        except Exception:
+            pass
         mode = self.mode_var.get()
         btn_text = "▶  Play in VLC" if mode == "stream" else "📥  Download Media"
         self.go_btn.config(state="normal", text=btn_text)
-        self.app.set_status("Ready")
+        self.app.set_busy(False, "Ready")
         if hasattr(self.app, "history_tab") and hasattr(self.app.history_tab, "refresh"):
             self.app.history_tab.refresh()

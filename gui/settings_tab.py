@@ -151,7 +151,12 @@ class SettingsTab(ttk.Frame):
 
     def load_current_values(self):
         cfg = config.load_config()
-        self.vlc_path_var.set(cfg.get("vlc_path", "") or vlc_utils.find_vlc_path() or "")
+        vlc_val = cfg.get("vlc_path", "")
+        self.vlc_path_var.set(vlc_val)
+        if not vlc_val:
+            vlc_utils.find_vlc_path_async(
+                lambda p: self.root.after(0, lambda: self.vlc_path_var.set(p or "")) if p else None
+            )
         self.dl_dir_var.set(cfg.get("download_dir", ""))
         self.default_mode_var.set(cfg.get("default_mode", "stream"))
         self.default_quality_var.set(cfg.get("default_quality", "720p"))
@@ -250,7 +255,7 @@ class SettingsTab(ttk.Frame):
 
     def _check_ytdlp_update(self):
         self.update_btn.config(state="disabled", text="⏳ Checking...")
-        self.app.set_status("Checking for yt-dlp update on PyPI...")
+        self.app.set_busy(True, "Checking for yt-dlp update on PyPI...")
 
         def check():
             info = ytdlp_utils.get_version_info()
@@ -260,6 +265,7 @@ class SettingsTab(ttk.Frame):
 
     def _on_version_result(self, info):
         self.update_btn.config(state="normal", text="🔄 Check for yt-dlp Updates")
+        self.app.set_busy(False)
         installed = info.get("installed")
         latest = info.get("latest")
         if info.get("update_available"):
@@ -272,7 +278,7 @@ class SettingsTab(ttk.Frame):
             messagebox.showinfo("Version Check", f"Installed version: {installed}\n(Could not reach PyPI to check latest version)")
 
     def _run_ytdlp_update(self):
-        self.app.set_status("Updating yt-dlp in background...")
+        self.app.set_busy(True, "Updating yt-dlp in background...")
         if hasattr(self.app, "play_tab"):
             self.app.play_tab.log("Starting yt-dlp update via pip...")
 
@@ -280,6 +286,7 @@ class SettingsTab(ttk.Frame):
             success = ytdlp_utils.update_ytdlp(
                 log_callback=lambda m: self.app.play_tab.log(m) if hasattr(self.app, "play_tab") else None
             )
+            self.root.after(0, lambda: self.app.set_busy(False, "yt-dlp update finished"))
             self.root.after(0, lambda: messagebox.showinfo("Update Complete", "yt-dlp has been updated! Please restart the app.") if success else messagebox.showerror("Update Failed", "yt-dlp update encountered an error. Check Activity Log."))
 
         threading.Thread(target=update, daemon=True).start()

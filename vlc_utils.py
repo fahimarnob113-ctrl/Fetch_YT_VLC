@@ -7,17 +7,27 @@ from typing import List, Tuple, Optional, Callable
 import config
 
 
-def find_vlc_path() -> Optional[str]:
-    """Find VLC executable path from config, PATH, or standard installation locations."""
+_vlc_cache = None
+
+
+def find_vlc_path(force_refresh: bool = False) -> Optional[str]:
+    """Find VLC executable path with caching and persistent configuration save."""
+    global _vlc_cache
+    if not force_refresh and _vlc_cache and os.path.isfile(_vlc_cache):
+        return _vlc_cache
+
     # 1. Check user config first
     configured_path = config.get("vlc_path", "")
     if configured_path and os.path.isfile(configured_path):
+        _vlc_cache = configured_path
         return configured_path
 
     # 2. Check system PATH
     for name in ("vlc", "vlc.exe"):
         path = shutil.which(name)
         if path and os.path.isfile(path):
+            _vlc_cache = path
+            config.set_value("vlc_path", path)
             return path
 
     # 3. Check OS-specific standard directories
@@ -43,9 +53,22 @@ def find_vlc_path() -> Optional[str]:
 
     for c in candidates:
         if os.path.isfile(c):
+            _vlc_cache = c
+            config.set_value("vlc_path", c)
             return c
 
     return None
+
+
+def find_vlc_path_async(callback: Callable[[Optional[str]], None]):
+    """Run VLC discovery in a background thread and return path via callback."""
+    import threading
+
+    def worker():
+        path = find_vlc_path()
+        callback(path)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def get_vlc_version(vlc_path: Optional[str] = None) -> Optional[str]:

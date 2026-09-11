@@ -262,7 +262,7 @@ class FavouritesTab(ttk.Frame):
 
         # Stream link
         if source_url:
-            self.app.set_status(f"Resolving favourite: {item.get('title')}...")
+            self.app.set_busy(True, f"Resolving favourite: {item.get('title')}...")
             if hasattr(self.app, "play_tab"):
                 self.app.play_tab.log(f"Resolving favourite: {item.get('title')}")
 
@@ -275,10 +275,12 @@ class FavouritesTab(ttk.Frame):
                     )
                     match = next((e for e in entries if e["title"] == item.get("title")), entries[0])
                     vlc_utils.launch_vlc(vlc_path, [match])
-                    self.root.after(0, lambda: self.app.set_status(f"Playing: {item.get('title')}"))
+                    self.root.after(0, lambda: self.app.set_busy(False, f"Playing: {item.get('title')}"))
                 except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror("Playback Error", f"Could not stream favourite:\n{e}"))
-                    self.root.after(0, lambda: self.app.set_status("Playback failed"))
+                    self.root.after(0, lambda: [
+                        messagebox.showerror("Playback Error", f"Could not stream favourite:\n{e}"),
+                        self.app.set_busy(False, "Playback failed")
+                    ])
 
             threading.Thread(target=redo, daemon=True).start()
 

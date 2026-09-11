@@ -252,7 +252,7 @@ class HistoryTab(ttk.Frame):
 
         # Stream replay
         if source_url:
-            self.app.set_status(f"Re-resolving stream for: {entry.get('title')}...")
+            self.app.set_busy(True, f"Re-resolving stream for: {entry.get('title')}...")
             if hasattr(self.app, "play_tab"):
                 self.app.play_tab.log(f"Re-resolving: {entry.get('title')}")
 
@@ -265,10 +265,12 @@ class HistoryTab(ttk.Frame):
                     )
                     match = next((e for e in entries if e["title"] == entry.get("title")), entries[0])
                     vlc_utils.launch_vlc(vlc_path, [match])
-                    self.root.after(0, lambda: self.app.set_status(f"Playing: {entry.get('title')}"))
+                    self.root.after(0, lambda: self.app.set_busy(False, f"Playing: {entry.get('title')}"))
                 except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror("Replay Error", f"Could not re-resolve stream:\n{e}"))
-                    self.root.after(0, lambda: self.app.set_status("Replay failed"))
+                    self.root.after(0, lambda: [
+                        messagebox.showerror("Replay Error", f"Could not re-resolve stream:\n{e}"),
+                        self.app.set_busy(False, "Replay failed")
+                    ])
 
             threading.Thread(target=redo, daemon=True).start()
 
