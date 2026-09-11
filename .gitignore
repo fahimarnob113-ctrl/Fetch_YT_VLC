@@ -17,7 +17,6 @@ dist/
 
 # PyInstaller
 *.manifest
-*.spec
 
 # User / OS files
 .DS_Store
