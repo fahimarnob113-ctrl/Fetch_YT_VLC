@@ -62,9 +62,11 @@ class SettingsTab(ttk.Frame):
         q_row = tb.Frame(dl_group)
         q_row.pack(fill="x", pady=(8, 4))
         tb.Label(q_row, text="Default Quality:", width=16).pack(side="left")
-        self.default_quality_var = tk.StringVar(value="720p")
-        quality_choices = list(ytdlp_utils.FORMAT_MAP.keys())
-        self.q_combo = tb.Combobox(q_row, textvariable=self.default_quality_var, values=quality_choices, state="readonly", width=18, bootstyle="warning")
+        from gui.play_tab import QUALITY_MAP, REV_QUALITY_MAP
+        quality_choices = list(QUALITY_MAP.values())
+        curr_q = config.get("default_quality", "720p")
+        self.default_quality_var = tk.StringVar(value=QUALITY_MAP.get(curr_q, QUALITY_MAP["720p"]))
+        self.q_combo = tb.Combobox(q_row, textvariable=self.default_quality_var, values=quality_choices, state="readonly", width=26, bootstyle="warning")
         self.q_combo.pack(side="left", padx=(0, 12))
         self.q_combo.bind("<<ComboboxSelected>>", lambda e: self._save_setting())
 
@@ -78,10 +80,10 @@ class SettingsTab(ttk.Frame):
         toggles_row.pack(fill="x", pady=(6, 0))
 
         self.auto_open_var = tk.BooleanVar(value=True)
-        tb.Checkbutton(toggles_row, text="Auto-open in VLC after download completes", variable=self.auto_open_var, bootstyle="warning-round-toggle", command=self._save_setting).pack(side="left", padx=(0, 16))
+        tb.Checkbutton(toggles_row, text="Auto-open in VLC after download", variable=self.auto_open_var, bootstyle="warning-round-toggle", command=self._save_setting).pack(side="left", padx=(0, 16))
 
         self.paste_go_var = tk.BooleanVar(value=False)
-        tb.Checkbutton(toggles_row, text="Paste-and-Go (Auto-play when pasting a URL)", variable=self.paste_go_var, bootstyle="warning-round-toggle", command=self._save_setting).pack(side="left")
+        tb.Checkbutton(toggles_row, text="Paste-and-Go (Instant play on URL paste)", variable=self.paste_go_var, bootstyle="warning-round-toggle", command=self._save_setting).pack(side="left")
 
         # --- Section 3: Watch History & Backup (NewPipe Style) ---
         hist_group = tb.LabelFrame(container, text=" 🕒 Watch History & Backup / Restore ", padding=12)
@@ -119,7 +121,7 @@ class SettingsTab(ttk.Frame):
         ).pack(side="left")
 
         # --- Section 4: Diagnostics & System ---
-        sys_group = tb.LabelFrame(container, text=" 🛠️ Diagnostics & Updates ", padding=12)
+        sys_group = tb.LabelFrame(container, text=" 🛠️ Diagnostics & Engine Status ", padding=12)
         sys_group.pack(fill="x")
 
         sys_row = tb.Frame(sys_group)
@@ -128,7 +130,7 @@ class SettingsTab(ttk.Frame):
         self.debug_var = tk.BooleanVar(value=config.get("debug_mode", False))
         tb.Checkbutton(
             sys_row,
-            text="Debug Mode (verbose logs, Ctrl+D shortcut)",
+            text="Debug Mode (detailed logs, Ctrl+D shortcut)",
             variable=self.debug_var,
             bootstyle="warning-round-toggle",
             command=self._toggle_debug
@@ -142,12 +144,13 @@ class SettingsTab(ttk.Frame):
         )
         self.update_btn.pack(side="right")
 
+        node_ok = shutil.which("node") is not None
         self.env_label = tb.Label(
             sys_group,
-            text=f"Python {sys.version.split()[0]}  |  Node.js: {'Detected' if shutil.which('node') else 'Not Found'}",
+            text=f"● Python {sys.version.split()[0]}  |  {'● Node.js (Ready)' if node_ok else '○ Node.js (Optional, recommended for JS signatures)'}",
             style="Muted.TLabel"
         )
-        self.env_label.pack(anchor="w", pady=(6, 0))
+        self.env_label.pack(anchor="w", pady=(8, 0))
 
     def load_current_values(self):
         cfg = config.load_config()
@@ -159,7 +162,9 @@ class SettingsTab(ttk.Frame):
             )
         self.dl_dir_var.set(cfg.get("download_dir", ""))
         self.default_mode_var.set(cfg.get("default_mode", "stream"))
-        self.default_quality_var.set(cfg.get("default_quality", "720p"))
+        from gui.play_tab import QUALITY_MAP
+        curr_q = cfg.get("default_quality", "720p")
+        self.default_quality_var.set(QUALITY_MAP.get(curr_q, QUALITY_MAP["720p"]))
         self.warn_size_var.set(str(cfg.get("warn_size_threshold_mb", 1024)))
         self.auto_open_var.set(cfg.get("auto_open_vlc", True))
         self.paste_go_var.set(cfg.get("paste_and_go", False))
@@ -178,10 +183,14 @@ class SettingsTab(ttk.Frame):
         except ValueError:
             cap = 500
 
+        from gui.play_tab import REV_QUALITY_MAP
+        raw_q = self.default_quality_var.get()
+        saved_q = REV_QUALITY_MAP.get(raw_q, raw_q)
+
         config.set_value("vlc_path", self.vlc_path_var.get().strip())
         config.set_value("download_dir", self.dl_dir_var.get().strip())
         config.set_value("default_mode", self.default_mode_var.get())
-        config.set_value("default_quality", self.default_quality_var.get())
+        config.set_value("default_quality", saved_q)
         config.set_value("warn_size_threshold_mb", warn_mb)
         config.set_value("auto_open_vlc", self.auto_open_var.get())
         config.set_value("paste_and_go", self.paste_go_var.get())

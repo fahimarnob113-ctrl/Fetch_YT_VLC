@@ -56,16 +56,18 @@ class HistoryTab(ttk.Frame):
         self.count_label.pack(side="right")
 
         # 2. History Treeview with Scrollbar
-        tree_container = tb.Frame(self)
-        tree_container.pack(fill="both", expand=True, pady=(0, 8))
+        self.tree_container = tb.Frame(self)
+        self.tree_container.pack(fill="both", expand=True, pady=(0, 8))
 
         columns = ("timestamp", "title", "kind", "duration")
         self.tree = ttk.Treeview(
-            tree_container,
+            self.tree_container,
             columns=columns,
             show="headings",
             selectmode="browse"
         )
+        from theme import setup_treeview_tags
+        setup_treeview_tags(self.tree)
 
         self.tree.heading("timestamp", text="When ⬍", command=lambda: self._sort_by("timestamp"))
         self.tree.heading("title", text="Title ⬍", command=lambda: self._sort_by("title"))
@@ -77,11 +79,23 @@ class HistoryTab(ttk.Frame):
         self.tree.column("kind", width=110, minwidth=90, stretch=False, anchor="center")
         self.tree.column("duration", width=80, minwidth=65, stretch=False, anchor="center")
 
-        scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.scrollbar = ttk.Scrollbar(self.tree_container, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
 
         self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.scrollbar.pack(side="right", fill="y")
+
+        # Empty State Placeholder Frame
+        self.empty_frame = tb.Frame(self.tree_container)
+        tb.Label(self.empty_frame, text="🕒", font=("Segoe UI", 36)).pack(pady=(30, 8))
+        tb.Label(self.empty_frame, text="No Watch History Yet", font=("Segoe UI", 12, "bold"), foreground=VLC_ORANGE).pack(pady=(0, 4))
+        tb.Label(
+            self.empty_frame,
+            text="Videos and playlists you stream or download will be saved here.\nDouble-click any entry for instant one-click replay in VLC.",
+            font=("Segoe UI", 9),
+            style="Muted.TLabel",
+            justify="center"
+        ).pack(pady=(0, 20))
 
         # Bind events
         self.tree.bind("<Double-1>", self._on_double_click)
@@ -99,7 +113,7 @@ class HistoryTab(ttk.Frame):
 
         # 3. Action Buttons Bar
         btn_frame = tb.Frame(self)
-        btn_frame.pack(fill="x", pady=(4, 0))
+        btn_frame.pack(fill="x", pady=(4, 6))
 
         # Left Actions
         tb.Button(
@@ -145,6 +159,16 @@ class HistoryTab(ttk.Frame):
             command=self.clear_all
         ).pack(side="right")
 
+        # 4. Cheatsheet Tip Bar
+        tip_bar = tb.Frame(self)
+        tip_bar.pack(fill="x", side="bottom")
+        tb.Label(
+            tip_bar,
+            text="💡 Double-click any row to replay in VLC  •  Right-click for options",
+            font=("Segoe UI", 8),
+            style="Muted.TLabel"
+        ).pack(side="left")
+
     def _on_double_click(self, event):
         row_id = self.tree.identify_row(event.y)
         if row_id:
@@ -177,7 +201,9 @@ class HistoryTab(ttk.Frame):
             url = entry.get("source_url", "")
             if not query or query in title.lower() or query in url.lower():
                 match_count += 1
-                kind_display = "📥 Download" if entry.get("kind") == "downloaded" else "▶ Stream"
+                kind = entry.get("kind", "streamed")
+                kind_display = "📥 Downloaded" if kind == "downloaded" else "▶ Streamed"
+                tag = "downloaded" if kind == "downloaded" else "streamed"
                 self.tree.insert(
                     "",
                     "end",
@@ -187,14 +213,25 @@ class HistoryTab(ttk.Frame):
                         title,
                         kind_display,
                         entry.get("duration", "")
-                    )
+                    ),
+                    tags=(tag,)
                 )
 
         total = len(self._history_entries)
-        if query:
-            self.count_label.config(text=f"{match_count} of {total} entries")
+        if total == 0:
+            self.tree.pack_forget()
+            self.scrollbar.pack_forget()
+            self.empty_frame.pack(fill="both", expand=True)
+            self.count_label.config(text="0 entries")
         else:
-            self.count_label.config(text=f"{total} entries")
+            self.empty_frame.pack_forget()
+            if not self.tree.winfo_ismapped():
+                self.tree.pack(side="left", fill="both", expand=True)
+                self.scrollbar.pack(side="right", fill="y")
+            if query:
+                self.count_label.config(text=f"{match_count} of {total} entries")
+            else:
+                self.count_label.config(text=f"{total} entries")
 
     def _sort_by(self, col):
         if self._sort_column == col:

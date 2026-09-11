@@ -9,7 +9,23 @@ import config
 import vlc_utils
 import ytdlp_utils
 import history
-from theme import VLC_ORANGE, VLC_DARK_BG, VLC_PANEL_BG, VLC_INPUT_BG, VLC_TEXT
+from theme import (
+    VLC_ORANGE, VLC_DARK_BG, VLC_PANEL_BG, VLC_INPUT_BG, VLC_TEXT,
+    VLC_TEXT_MUTED, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARN, COLOR_INFO,
+    COLOR_URL, COLOR_DOWNLOAD
+)
+
+URL_PLACEHOLDER = "Paste a YouTube video or playlist link here (e.g. https://youtu.be/...)"
+
+QUALITY_MAP = {
+    "720p": "720p (Recommended / Fast)",
+    "1080p": "1080p (Full HD)",
+    "480p": "480p (Data Saver)",
+    "360p": "360p (Minimal)",
+    "best": "Best Available (Max Quality)",
+    "audio_only": "Audio Only (Stream/Music)",
+}
+REV_QUALITY_MAP = {v: k for k, v in QUALITY_MAP.items()}
 
 
 class PlayTab(ttk.Frame):
@@ -99,27 +115,30 @@ class PlayTab(ttk.Frame):
         entry_row = tb.Frame(self.url_frame)
         entry_row.pack(fill="x")
 
-        self.url_var = tk.StringVar()
+        self.url_var = tk.StringVar(value=URL_PLACEHOLDER)
         self.url_entry = tb.Entry(
             entry_row,
             textvariable=self.url_var,
-            font=("Segoe UI", 10)
+            font=("Segoe UI", 10),
+            foreground=VLC_TEXT_MUTED
         )
         self.url_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.url_entry.bind("<Return>", lambda e: self.on_go())
+        self.url_entry.bind("<FocusIn>", self._on_url_focus_in)
+        self.url_entry.bind("<FocusOut>", self._on_url_focus_out)
 
         tb.Button(
             entry_row,
-            text="Paste",
+            text="📋 Paste",
             style="Action.TButton",
             command=self._paste_from_clipboard
         ).pack(side="left", padx=(0, 4))
 
         tb.Button(
             entry_row,
-            text="Clear",
+            text="✕ Clear",
             style="Action.TButton",
-            command=lambda: self.url_var.set("")
+            command=self._clear_url
         ).pack(side="left")
 
         # Validation feedback label
@@ -155,16 +174,23 @@ class PlayTab(ttk.Frame):
         )
         self.radio_download.pack(anchor="w", pady=2)
 
+        self.mode_desc_label = tb.Label(
+            mode_group,
+            text="⚡ Streams directly to VLC with zero disk usage",
+            font=("Segoe UI", 8, "italic"),
+            foreground=VLC_ORANGE
+        )
+        self.mode_desc_label.pack(anchor="w", pady=(4, 0))
+
         # Quality Selection
         quality_group = tb.LabelFrame(opts_frame, text=" Quality / Format ", padding=10)
         quality_group.pack(side="left", fill="both", expand=True, padx=(6, 0))
 
-        quality_choices = list(ytdlp_utils.FORMAT_MAP.keys())
-        default_q = config.get("default_quality", "720p")
-        if default_q not in quality_choices:
-            default_q = "720p"
+        quality_choices = list(QUALITY_MAP.values())
+        default_q_key = config.get("default_quality", "720p")
+        default_q_label = QUALITY_MAP.get(default_q_key, QUALITY_MAP["720p"])
 
-        self.quality_var = tk.StringVar(value=default_q)
+        self.quality_var = tk.StringVar(value=default_q_label)
         self.quality_combo = tb.Combobox(
             quality_group,
             textvariable=self.quality_var,
@@ -299,6 +325,13 @@ class PlayTab(ttk.Frame):
             wrap="word",
             state="disabled"
         )
+        self.log_text.tag_configure("time", foreground="#777777")
+        self.log_text.tag_configure("success", foreground=COLOR_SUCCESS, font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("error", foreground=COLOR_ERROR, font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("warn", foreground=COLOR_WARN)
+        self.log_text.tag_configure("info", foreground=COLOR_INFO)
+        self.log_text.tag_configure("url", foreground=COLOR_URL)
+        self.log_text.tag_configure("normal", foreground=VLC_TEXT)
         self.log_text.pack(fill="both", expand=True)
 
         # Initial Welcome in Log
@@ -326,11 +359,31 @@ class PlayTab(ttk.Frame):
                 self.log("⚠️ VLC not detected automatically. Please click 'Browse...' to select vlc.exe.")
         self.root.after(0, apply)
 
+    def _on_url_focus_in(self, event=None):
+        if self.url_var.get() == URL_PLACEHOLDER:
+            self.url_var.set("")
+            self.url_entry.config(foreground=VLC_TEXT)
+
+    def _on_url_focus_out(self, event=None):
+        if not self.url_var.get().strip():
+            self.url_var.set(URL_PLACEHOLDER)
+            self.url_entry.config(foreground=VLC_TEXT_MUTED)
+
+    def _get_url(self) -> str:
+        val = self.url_var.get().strip()
+        return "" if val == URL_PLACEHOLDER else val
+
+    def _clear_url(self):
+        self.url_var.set(URL_PLACEHOLDER)
+        self.url_entry.config(foreground=VLC_TEXT_MUTED)
+        self.validation_label.config(text="")
+
     def _paste_from_clipboard(self):
         try:
             text = self.root.clipboard_get()
             if text:
                 self.url_var.set(text.strip())
+                self.url_entry.config(foreground=VLC_TEXT)
                 self.validation_label.config(text="")
                 if config.get("paste_and_go", False):
                     self.on_go()
@@ -342,9 +395,13 @@ class PlayTab(ttk.Frame):
         if mode == "stream":
             self.go_btn.config(text="▶  Play in VLC", bootstyle="warning")
             self.dl_path_label.config(bootstyle="secondary")
+            if hasattr(self, "mode_desc_label"):
+                self.mode_desc_label.config(text="⚡ Streams directly to VLC with zero disk usage", foreground=VLC_ORANGE)
         else:
             self.go_btn.config(text="📥  Download Media", bootstyle="warning")
             self.dl_path_label.config(bootstyle="info")
+            if hasattr(self, "mode_desc_label"):
+                self.mode_desc_label.config(text="💾 Downloads and saves media to your folder", foreground=COLOR_DOWNLOAD)
 
     def _choose_download_dir(self):
         folder = filedialog.askdirectory(
@@ -390,10 +447,26 @@ class PlayTab(ttk.Frame):
             self.cancel_btn.config(state="disabled")
 
     def log(self, message: str):
-        """Thread-safe logging to the text box."""
+        """Thread-safe rich color logging with timestamps."""
+        import datetime
+        now = datetime.datetime.now().strftime("[%H:%M:%S] ")
+
+        msg_tag = "normal"
+        if "✅" in message or "complete" in message.lower() or "success" in message.lower():
+            msg_tag = "success"
+        elif "❌" in message or "error" in message.lower() or "failed" in message.lower():
+            msg_tag = "error"
+        elif "⚠️" in message or "warn" in message.lower():
+            msg_tag = "warn"
+        elif any(w in message for w in ("Resolving", "Estimating", "Handing", "Fetching", "Contacting")):
+            msg_tag = "info"
+        elif "http" in message or "vlc.exe" in message.lower():
+            msg_tag = "url"
+
         def append():
             self.log_text.config(state="normal")
-            self.log_text.insert("end", f"{message}\n")
+            self.log_text.insert("end", now, "time")
+            self.log_text.insert("end", f"{message}\n", msg_tag)
             self.log_text.see("end")
             self.log_text.config(state="disabled")
         self.root.after(0, append)
@@ -407,7 +480,7 @@ class PlayTab(ttk.Frame):
         if self.is_working:
             return
 
-        raw_url = self.url_var.get().strip()
+        raw_url = self._get_url()
         is_valid, err_msg = ytdlp_utils.validate_url(raw_url)
         if not is_valid:
             self.validation_label.config(text=f"❌ {err_msg}", foreground="#e74c3c")
@@ -423,7 +496,8 @@ class PlayTab(ttk.Frame):
             return
 
         mode = self.mode_var.get()
-        quality = self.quality_var.get()
+        quality_label = self.quality_var.get()
+        quality = REV_QUALITY_MAP.get(quality_label, quality_label)
 
         # Update UI to working state
         self.is_working = True

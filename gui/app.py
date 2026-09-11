@@ -9,8 +9,8 @@ class MainApp:
     def __init__(self, root: tb.Window):
         self.root = root
         self.root.title("YT → VLC Launcher")
-        self.root.geometry("820x620")
-        self.root.minsize(700, 500)
+        self.root.geometry("860x640")
+        self.root.minsize(720, 520)
 
         # Load configuration
         self.cfg = config.load_config()
@@ -21,10 +21,12 @@ class MainApp:
         # Keyboard shortcuts
         self.root.bind("<Control-d>", self._toggle_debug_shortcut)
         self.root.bind("<Control-D>", self._toggle_debug_shortcut)
+        for i in range(5):
+            self.root.bind(f"<Control-Key-{i+1}>", lambda e, idx=i: self._select_tab(idx))
 
         # Main notebook (Tab control)
         self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=(8, 4))
 
         # Tab 1: Play / Download
         from gui.play_tab import PlayTab
@@ -51,8 +53,11 @@ class MainApp:
         self.settings_tab = SettingsTab(self.notebook, self)
         self.notebook.add(self.settings_tab, text="  ⚙️ Settings  ")
 
+        # Subtle separator above status bar
+        ttk.Separator(self.root, orient="horizontal").pack(fill="x", side="bottom")
+
         # Status Bar at bottom
-        self.status_bar = ttk.Frame(self.root, padding=(8, 4))
+        self.status_bar = ttk.Frame(self.root, padding=(10, 5))
         self.status_bar.pack(fill="x", side="bottom")
 
         self.status_label = ttk.Label(
@@ -76,6 +81,13 @@ class MainApp:
             bootstyle="warning-striped",
             length=140
         )
+
+    def _select_tab(self, idx: int):
+        try:
+            self.notebook.select(idx)
+        except Exception:
+            pass
+        return "break"
 
     def _toggle_debug_shortcut(self, event=None):
         current = config.get("debug_mode", False)

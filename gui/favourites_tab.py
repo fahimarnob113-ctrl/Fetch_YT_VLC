@@ -41,30 +41,39 @@ class FavouritesTab(ttk.Frame):
 
         tb.Button(
             entry_box,
-            text="Paste",
+            text="📋 Paste",
             style="Action.TButton",
             command=self._paste_url
         ).pack(side="left", padx=(0, 4))
 
         self.add_btn = tb.Button(
             entry_box,
-            text="+ Add to Favourites",
+            text="+ Pin Video",
             style="VLC.TButton",
             command=self._add_manual_url
         )
-        self.add_btn.pack(side="left")
+        self.add_btn.pack(side="left", padx=(0, 10))
+
+        self.fav_count_label = tb.Label(
+            entry_box,
+            text="0 pinned",
+            style="Muted.TLabel"
+        )
+        self.fav_count_label.pack(side="right")
 
         # 2. Favourites Treeview
-        tree_container = tb.Frame(self)
-        tree_container.pack(fill="both", expand=True, pady=(0, 8))
+        self.tree_container = tb.Frame(self)
+        self.tree_container.pack(fill="both", expand=True, pady=(0, 8))
 
         columns = ("title", "kind", "duration", "added_at")
         self.tree = ttk.Treeview(
-            tree_container,
+            self.tree_container,
             columns=columns,
             show="headings",
             selectmode="browse"
         )
+        from theme import setup_treeview_tags
+        setup_treeview_tags(self.tree)
 
         self.tree.heading("title", text="Title")
         self.tree.heading("kind", text="Type")
@@ -76,11 +85,23 @@ class FavouritesTab(ttk.Frame):
         self.tree.column("duration", width=80, minwidth=65, stretch=False, anchor="center")
         self.tree.column("added_at", width=140, minwidth=120, stretch=False, anchor="center")
 
-        scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.scrollbar = ttk.Scrollbar(self.tree_container, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
 
         self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.scrollbar.pack(side="right", fill="y")
+
+        # Empty State Placeholder Frame
+        self.empty_frame = tb.Frame(self.tree_container)
+        tb.Label(self.empty_frame, text="⭐", font=("Segoe UI", 36)).pack(pady=(30, 8))
+        tb.Label(self.empty_frame, text="No Favourites Pinned Yet", font=("Segoe UI", 12, "bold"), foreground=VLC_ORANGE).pack(pady=(0, 4))
+        tb.Label(
+            self.empty_frame,
+            text="Pin your favourite videos from Watch History or paste any link above.\nQuickly reorder items using Move Up / Down.",
+            font=("Segoe UI", 9),
+            style="Muted.TLabel",
+            justify="center"
+        ).pack(pady=(0, 20))
 
         # Bind events
         self.tree.bind("<Double-1>", self._on_double_click)
@@ -99,7 +120,7 @@ class FavouritesTab(ttk.Frame):
 
         # 3. Action Buttons Bar
         btn_frame = tb.Frame(self)
-        btn_frame.pack(fill="x", pady=(4, 0))
+        btn_frame.pack(fill="x", pady=(4, 6))
 
         # Left Actions
         tb.Button(
@@ -144,6 +165,16 @@ class FavouritesTab(ttk.Frame):
             style="Danger.TButton",
             command=self.remove_selected
         ).pack(side="right")
+
+        # 4. Cheatsheet Tip Bar
+        tip_bar = tb.Frame(self)
+        tip_bar.pack(fill="x", side="bottom")
+        tb.Label(
+            tip_bar,
+            text="💡 Double-click any favourite to play in VLC  •  Use Move Up / Down to order your list",
+            font=("Segoe UI", 8),
+            style="Muted.TLabel"
+        ).pack(side="left")
 
     def _paste_url(self):
         try:
@@ -193,7 +224,7 @@ class FavouritesTab(ttk.Frame):
                     self.app.set_status("Added URL to favourites")
                 ])
             finally:
-                self.root.after(0, lambda: self.add_btn.config(state="normal", text="+ Add to Favourites"))
+                self.root.after(0, lambda: self.add_btn.config(state="normal", text="+ Pin Video"))
 
         threading.Thread(target=fetch, daemon=True).start()
 
@@ -213,19 +244,34 @@ class FavouritesTab(ttk.Frame):
         """Reload favourites and re-render."""
         self._items = favourites.load_favourites()
         self.tree.delete(*self.tree.get_children())
-        for idx, item in enumerate(self._items):
-            kind_str = "📥 Offline" if item.get("kind") == "downloaded" else "▶ Stream"
-            self.tree.insert(
-                "",
-                "end",
-                iid=str(idx),
-                values=(
-                    item.get("title", "Unknown"),
-                    kind_str,
-                    item.get("duration", ""),
-                    item.get("added_at", "")
+        total = len(self._items)
+        if total == 0:
+            self.tree.pack_forget()
+            self.scrollbar.pack_forget()
+            self.empty_frame.pack(fill="both", expand=True)
+            self.fav_count_label.config(text="0 pinned")
+        else:
+            self.empty_frame.pack_forget()
+            if not self.tree.winfo_ismapped():
+                self.tree.pack(side="left", fill="both", expand=True)
+                self.scrollbar.pack(side="right", fill="y")
+            self.fav_count_label.config(text=f"{total} pinned")
+            for idx, item in enumerate(self._items):
+                kind = item.get("kind", "streamed")
+                kind_str = "📥 Downloaded" if kind == "downloaded" else "▶ Streamed"
+                tag = "downloaded" if kind == "downloaded" else "streamed"
+                self.tree.insert(
+                    "",
+                    "end",
+                    iid=str(idx),
+                    values=(
+                        item.get("title", "Unknown"),
+                        kind_str,
+                        item.get("duration", ""),
+                        item.get("added_at", "")
+                    ),
+                    tags=(tag,)
                 )
-            )
 
     def _get_selected(self):
         sel = self.tree.selection()

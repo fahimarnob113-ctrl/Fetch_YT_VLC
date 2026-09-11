@@ -56,12 +56,13 @@ class PlaylistsTab(ttk.Frame):
         self.fetch_btn.pack(side="left")
 
         # 2. Split Paned Window (Left: Playlists, Right: Tracks)
-        paned = ttk.PanedWindow(self, orient="horizontal")
-        paned.pack(fill="both", expand=True, pady=(0, 8))
+        self.paned = ttk.PanedWindow(self, orient="horizontal")
+        self.paned.pack(fill="both", expand=True, pady=(0, 8))
+        self.root.after(50, self._set_initial_sash)
 
         # --- Left Panel: Playlists List ---
-        left_frame = tb.Frame(paned, padding=(0, 0, 8, 0))
-        paned.add(left_frame, weight=1)
+        left_frame = tb.Frame(self.paned, padding=(0, 0, 8, 0))
+        self.paned.add(left_frame, weight=1)
 
         left_hdr = tb.Frame(left_frame)
         left_hdr.pack(fill="x", pady=(0, 4))
@@ -78,8 +79,8 @@ class PlaylistsTab(ttk.Frame):
         )
         self.pl_tree.heading("name", text="Playlist")
         self.pl_tree.heading("count", text="Tracks")
-        self.pl_tree.column("name", width=160, stretch=True)
-        self.pl_tree.column("count", width=60, stretch=False, anchor="center")
+        self.pl_tree.column("name", width=170, stretch=True)
+        self.pl_tree.column("count", width=65, stretch=False, anchor="center")
 
         pl_scroll = ttk.Scrollbar(pl_tree_box, orient="vertical", command=self.pl_tree.yview)
         self.pl_tree.configure(yscrollcommand=pl_scroll.set)
@@ -114,8 +115,8 @@ class PlaylistsTab(ttk.Frame):
         ).pack(side="right")
 
         # --- Right Panel: Selected Playlist Tracks ---
-        right_frame = tb.Frame(paned, padding=(8, 0, 0, 0))
-        paned.add(right_frame, weight=3)
+        right_frame = tb.Frame(self.paned, padding=(8, 0, 0, 0))
+        self.paned.add(right_frame, weight=3)
 
         right_hdr = tb.Frame(right_frame)
         right_hdr.pack(fill="x", pady=(0, 4))
@@ -135,11 +136,11 @@ class PlaylistsTab(ttk.Frame):
         )
         self.details_count.pack(side="right")
 
-        tracks_box = tb.Frame(right_frame)
-        tracks_box.pack(fill="both", expand=True, pady=(0, 6))
+        self.tracks_box = tb.Frame(right_frame)
+        self.tracks_box.pack(fill="both", expand=True, pady=(0, 6))
 
         self.tracks_tree = ttk.Treeview(
-            tracks_box,
+            self.tracks_box,
             columns=("index", "title", "duration"),
             show="headings",
             selectmode="browse"
@@ -152,10 +153,22 @@ class PlaylistsTab(ttk.Frame):
         self.tracks_tree.column("title", width=380, stretch=True)
         self.tracks_tree.column("duration", width=80, stretch=False, anchor="center")
 
-        tr_scroll = ttk.Scrollbar(tracks_box, orient="vertical", command=self.tracks_tree.yview)
-        self.tracks_tree.configure(yscrollcommand=tr_scroll.set)
+        self.tr_scroll = ttk.Scrollbar(self.tracks_box, orient="vertical", command=self.tracks_tree.yview)
+        self.tracks_tree.configure(yscrollcommand=self.tr_scroll.set)
         self.tracks_tree.pack(side="left", fill="both", expand=True)
-        tr_scroll.pack(side="right", fill="y")
+        self.tr_scroll.pack(side="right", fill="y")
+
+        # Right panel empty state
+        self.right_empty_frame = tb.Frame(self.tracks_box)
+        tb.Label(self.right_empty_frame, text="📁", font=("Segoe UI", 36)).pack(pady=(35, 8))
+        tb.Label(self.right_empty_frame, text="Select a Playlist", font=("Segoe UI", 12, "bold"), foreground=VLC_ORANGE).pack(pady=(0, 4))
+        tb.Label(
+            self.right_empty_frame,
+            text="Select a playlist from the left panel to view tracks,\nor paste a YouTube playlist URL above to save it.",
+            font=("Segoe UI", 9),
+            style="Muted.TLabel",
+            justify="center"
+        ).pack(pady=(0, 20))
 
         self.tracks_tree.bind("<Double-1>", lambda e: self.play_selected_track())
         self.tracks_tree.bind("<Return>", lambda e: self.play_selected_track())
@@ -198,10 +211,16 @@ class PlaylistsTab(ttk.Frame):
 
         tb.Label(
             hint_bar,
-            text="💡 VLC Shortcuts:  Ctrl+L = Playlist Panel  |  N = Next Track  |  P = Prev Track  |  Space = Pause  |  F = Fullscreen",
+            text="💡 VLC Hotkeys:  [Ctrl+L] Queue Panel  •  [N] Next Track  •  [P] Prev Track  •  [Space] Pause  •  [F] Fullscreen",
             font=("Segoe UI", 8, "bold"),
             foreground=VLC_ORANGE
         ).pack(side="left")
+
+    def _set_initial_sash(self):
+        try:
+            self.paned.sashpos(0, 250)
+        except Exception:
+            pass
 
     def _paste_url(self):
         try:
@@ -286,6 +305,30 @@ class PlaylistsTab(ttk.Frame):
             self._selected_playlist_id = sel[0]
             self._load_tracks_for_playlist(sel[0])
 
+    def _calc_total_duration(self, items) -> str:
+        total_secs = 0
+        has_dur = False
+        for it in items:
+            d = str(it.get("duration", "")).strip()
+            if d:
+                parts = d.split(":")
+                try:
+                    if len(parts) == 2:
+                        total_secs += int(parts[0]) * 60 + int(parts[1])
+                        has_dur = True
+                    elif len(parts) == 3:
+                        total_secs += int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                        has_dur = True
+                except ValueError:
+                    pass
+        if not has_dur or total_secs == 0:
+            return f"{len(items)} tracks"
+        hrs = total_secs // 3600
+        mins = (total_secs % 3600) // 60
+        if hrs > 0:
+            return f"{len(items)} tracks • ~{hrs}h {mins}m"
+        return f"{len(items)} tracks • ~{mins}m"
+
     def _load_tracks_for_playlist(self, pl_id):
         pl = playlists.get_playlist(pl_id)
         if not pl:
@@ -295,25 +338,38 @@ class PlaylistsTab(ttk.Frame):
         self._selected_playlist_id = pl_id
         items = pl.get("items", [])
         self.details_title.config(text=pl.get("name", "Playlist"))
-        self.details_count.config(text=f"{len(items)} tracks")
+        self.details_count.config(text=self._calc_total_duration(items))
 
-        self.tracks_tree.delete(*self.tracks_tree.get_children())
-        for idx, it in enumerate(items):
-            self.tracks_tree.insert(
-                "",
-                "end",
-                iid=str(idx),
-                values=(
-                    it.get("index", idx + 1),
-                    it.get("title", "Unknown Track"),
-                    it.get("duration", "")
+        if len(items) == 0:
+            self.tracks_tree.pack_forget()
+            self.tr_scroll.pack_forget()
+            self.right_empty_frame.pack(fill="both", expand=True)
+        else:
+            self.right_empty_frame.pack_forget()
+            if not self.tracks_tree.winfo_ismapped():
+                self.tracks_tree.pack(side="left", fill="both", expand=True)
+                self.tr_scroll.pack(side="right", fill="y")
+
+            self.tracks_tree.delete(*self.tracks_tree.get_children())
+            for idx, it in enumerate(items):
+                self.tracks_tree.insert(
+                    "",
+                    "end",
+                    iid=str(idx),
+                    values=(
+                        it.get("index", idx + 1),
+                        it.get("title", "Unknown Track"),
+                        it.get("duration", "")
+                    )
                 )
-            )
 
     def _clear_tracks_view(self):
         self.details_title.config(text="No playlist selected")
         self.details_count.config(text="")
         self.tracks_tree.delete(*self.tracks_tree.get_children())
+        self.tracks_tree.pack_forget()
+        self.tr_scroll.pack_forget()
+        self.right_empty_frame.pack(fill="both", expand=True)
 
     def _new_playlist(self):
         name = simpledialog.askstring("New Playlist", "Enter a name for the new playlist:")
