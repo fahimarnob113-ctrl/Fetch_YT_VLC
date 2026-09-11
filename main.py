@@ -16,6 +16,15 @@ from gui.app import MainApp
 
 def main():
     root = tb.Window(themename="darkly")
+
+    # Set application icon
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "the logo or icon", "app_icon.ico")
+    if os.path.isfile(icon_path):
+        try:
+            root.iconbitmap(icon_path)
+        except Exception:
+            pass
+
     app = MainApp(root)
     root.mainloop()
 
