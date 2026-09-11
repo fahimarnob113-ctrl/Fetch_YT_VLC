@@ -41,6 +41,11 @@ class MainApp:
         self.favourites_tab = FavouritesTab(self.notebook, self)
         self.notebook.add(self.favourites_tab, text="  ⭐ Favourites  ")
 
+        # Tab 4: Persistent Playlists
+        from gui.playlists_tab import PlaylistsTab
+        self.playlists_tab = PlaylistsTab(self.notebook, self)
+        self.notebook.add(self.playlists_tab, text="  📁 Playlists  ")
+
         # Status Bar at bottom
         self.status_bar = ttk.Frame(self.root, padding=(8, 4))
         self.status_bar.pack(fill="x", side="bottom")

@@ -380,6 +380,17 @@ class PlayTab(ttk.Frame):
                         duration=item.get("duration", "")
                     )
 
+                # If it's a playlist, save to persistent playlists store
+                if meta.get("is_playlist"):
+                    try:
+                        import playlists
+                        pl_title = meta.get("playlist_title") or meta.get("title") or "YouTube Playlist"
+                        playlists.create_playlist(name=pl_title, source_url=url, items=entries)
+                        if hasattr(self.app, "playlists_tab") and hasattr(self.app.playlists_tab, "refresh"):
+                            self.root.after(0, self.app.playlists_tab.refresh)
+                    except Exception:
+                        pass
+
                 self.log("✅ Playback started in VLC.")
                 self.root.after(0, lambda: self.app.set_status("VLC playback active"))
 
