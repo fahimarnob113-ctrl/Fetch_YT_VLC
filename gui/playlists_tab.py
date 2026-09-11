@@ -192,6 +192,17 @@ class PlaylistsTab(ttk.Frame):
             command=self._remove_track
         ).pack(side="right")
 
+        # 3. VLC Keyboard Shortcuts Hint Bar
+        hint_bar = tb.Frame(right_frame, padding=(10, 6))
+        hint_bar.pack(fill="x", pady=(10, 0))
+
+        tb.Label(
+            hint_bar,
+            text="💡 VLC Shortcuts:  Ctrl+L = Playlist Panel  |  N = Next Track  |  P = Prev Track  |  Space = Pause  |  F = Fullscreen",
+            font=("Segoe UI", 8, "bold"),
+            foreground=VLC_ORANGE
+        ).pack(side="left")
+
     def _paste_url(self):
         try:
             txt = self.root.clipboard_get()
