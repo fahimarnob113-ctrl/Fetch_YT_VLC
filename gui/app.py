@@ -36,6 +36,11 @@ class MainApp:
         self.history_tab = HistoryTab(self.notebook, self)
         self.notebook.add(self.history_tab, text="  🕒 Watch History  ")
 
+        # Tab 3: Pinned Favourites
+        from gui.favourites_tab import FavouritesTab
+        self.favourites_tab = FavouritesTab(self.notebook, self)
+        self.notebook.add(self.favourites_tab, text="  ⭐ Favourites  ")
+
         # Status Bar at bottom
         self.status_bar = ttk.Frame(self.root, padding=(8, 4))
         self.status_bar.pack(fill="x", side="bottom")
